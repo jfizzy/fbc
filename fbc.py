@@ -1,7 +1,3 @@
-import hashlib
-import json
-from textwrap import dedent
-from time import time
 from uuid import uuid4
 
 import blockchain as bc
@@ -21,6 +17,13 @@ blockchain = bc.Blockchain()
 
 @app.route('/mine', methods=['GET'])
 def mine():
+    """
+    Mine operation Flask path
+    :return: <JSON> Response from server with a message,
+            index, list of new transactions, proof of
+            work, and previous hash value
+    """
+
     # We run the proof of work algorithm to get the next proof...
     last_block = blockchain.last_block
     last_proof = last_block['proof']
@@ -51,6 +54,13 @@ def mine():
 
 @app.route('/transactions/new', methods=['POST'])
 def new_transaction():
+    """
+    New Transaction Flask path
+    form-data of the POST'ed request must contain a sender,
+        recipient, and an amount value to make up the
+        transaction
+    :return: <JSON> Response from server with a message
+    """
     values = request.get_json()
 
     # Check that the required fields are in the POST'ed data
@@ -68,12 +78,62 @@ def new_transaction():
 
 @app.route('/chain', methods=['GET'])
 def full_chain():
+    """
+    Request de-facto Block Flask path
+    :return: <JSON> Response from server with a chain and a length (in nodes)
+    """
     response = {
         'chain': blockchain.chain,
         'length': len(blockchain.chain),
     }
     return jsonify(response), 200
 
+@app.route('/nodes/register', methods=['POST'])
+def register_nodes():
+    """
+    Register a new Node to the Blockchain network Flask path
+    :return: <JSON> Response from server with a message and
+        a count of total nodes
+    :error: <JSON> Client side error
+    """
+    values = request.get_json()
+
+    nodes = values.get('nodes')
+    if nodes is None:
+        return "Error: Please supply a valid list of nodes", 400
+
+    for node in nodes:
+        blockchain.register_node(node)
+
+    response = {
+        'message': 'New nodes have been added',
+        'total_nodes': list(blockchain.nodes),
+    }
+    return jsonify(response), 201
+
+
+@app.route('/nodes/resolve', methods=['GET'])
+def consensus():
+    """
+    Resolve chain conflicts in network Flask path
+    :return: <JSON> Response from server with a
+        message and the de-facto chain that
+        all nodes must follow going forwards
+    """
+    replaced = blockchain.resolve_conflicts()
+
+    if replaced:
+        response = {
+            'message': 'Our chain was replaced',
+            'new_chain': blockchain.chain
+        }
+    else:
+        response = {
+            'message': 'Our chain is authoritative',
+            'chain': blockchain.chain
+        }
+
+    return jsonify(response), 200
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
